@@ -14,6 +14,8 @@ You can, at any time, from the Privacy screen in the game:
 
 Ads on the stadium boards (when present) are the same for every player — nobody sees a different ad because of who they are, and no ad promotes gambling, alcohol or unhealthy food to children.
 
+**The shared preview link** is behind a simple passphrase screen and marked `noindex` so it doesn't show up in search engines. This is a courtesy gate for friends testing early builds, not real access control — it doesn't change anything about player data, which still never leaves the device either way.
+
 ## For anyone reviewing this technically
 
 - **No server-side processing.** The game is a single static HTML file. There is no backend, no API calls, no analytics beacon, and no third-party script that could read player data. Fonts load from Google Fonts over HTTPS; no player data is included in that request.

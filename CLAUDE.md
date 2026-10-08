@@ -2,7 +2,7 @@
 
 You are helping Marko build **Winger IQ**, a first-person football (soccer) decision-training web game for kids aged about 10–14. The player is a right winger. Each scenario plays a short build-up from the winger's eyes, slows down at the decision moment, and the player taps where the ball should go. The game then plays out the choice, explains it, shows a TV-style replay, and updates a Football IQ card.
 
-**The single source of truth is `winger-iq-game.html`.** It is one self-contained HTML file: all code, data, styles and sound. When changing the game:
+**The single source of truth is `winger-iq-game.html`.** It is one self-contained HTML file: all code, data, styles and sound. `index.html` and `robots.txt` are deployment-only files (a passphrase gate for the shared preview, and a search-engine opt-out) — they hold no game logic and should stay that way. When changing the game:
 
 - Start from the latest version of that file (or the newest version Marko pastes into the chat), never from memory.
 - Keep it a single self-contained file. No external images, models or scripts; fonts come from Google Fonts (to be self-hosted before launch).

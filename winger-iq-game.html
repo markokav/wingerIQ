@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Winger IQ</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
@@ -296,6 +297,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 <script>
 (() => {
 'use strict';
+const isLocalDev=location.protocol==='file:'||['localhost','127.0.0.1'].includes(location.hostname);
+if(!isLocalDev&&sessionStorage.getItem('wingerIQGate')!=='ok'){ location.replace('index.html'); return; }
 const D2R=Math.PI/180;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,u)=>a+(b-a)*u;

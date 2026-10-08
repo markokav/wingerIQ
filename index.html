@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Winger IQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef1ea; --card:#ffffff; --ink:#11171d; --muted:#56636c; --line:#d3d9cf;
+  --gold:#ffc81e;
+  box-sizing:border-box;
+}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f151b;color:var(--ink);font-family:"Barlow",system-ui,sans-serif;padding:16px}
+.sheet{background:var(--card);border-radius:20px;padding:28px 24px;width:min(360px,100%);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.brand{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:32px;text-transform:uppercase;letter-spacing:.02em;margin:0 0 4px}
+.brand span{color:var(--gold);-webkit-text-stroke:1px var(--ink)}
+.sub{color:var(--muted);font-size:14px;margin:0 0 20px}
+input{display:block;width:100%;border:2px solid var(--line);background:var(--paper);border-radius:10px;padding:12px 14px;font-size:17px;font-weight:600;text-align:center;margin-bottom:12px}
+input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.go{border:0;width:100%;background:var(--gold);color:#14100a;border-radius:14px;padding:13px 26px;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.02em;box-shadow:0 6px 0 #b48a00;cursor:pointer}
+.go:active{transform:translateY(2px);box-shadow:0 4px 0 #b48a00}
+.err{color:#e0402e;font-size:14px;font-weight:700;min-height:20px;margin:10px 0 0}
+</style>
+</head>
+<body>
+<form class="sheet" id="gate" autocomplete="off">
+  <p class="brand">Winger <span>IQ</span></p>
+  <p class="sub">Private preview &mdash; ask Marko for the passphrase.</p>
+  <input id="pass" type="password" placeholder="Passphrase" autofocus>
+  <button class="go" type="submit">Let's play</button>
+  <p class="err" id="err"></p>
+</form>
+<script>
+(async () => {
+  const HASH = '290e1d453907211b4b9c31a1208c35f647b8d7a86296bf71b03065645ecbf010';
+  const form = document.getElementById('gate'), input = document.getElementById('pass'), err = document.getElementById('err');
+  async function sha256(text){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+  if (sessionStorage.getItem('wingerIQGate') === 'ok') { location.replace('winger-iq-game.html'); return; }
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const digest = await sha256(input.value.trim());
+    if (digest === HASH) { sessionStorage.setItem('wingerIQGate','ok'); location.href = 'winger-iq-game.html'; }
+    else { err.textContent = 'Wrong passphrase.'; input.select(); }
+  });
+})();
+</script>
+</body>
+</html>
