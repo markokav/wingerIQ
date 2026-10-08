@@ -1551,7 +1551,7 @@ function buildBody(id,tt,ok){
     }
     const hp=[0,s*0.1,hip], d1=[Math.sin(A)*Math.cos(B),s*Math.sin(B),-Math.cos(A)*Math.cos(B)];
     const kn=vadd(hp,vsc(d1,0.46)), A2=A-K, d2=[Math.sin(A2)*Math.cos(B),s*Math.sin(B)*0.5,-Math.cos(A2)*Math.cos(B)];
-    const an=vadd(kn,vsc(d2,0.44)), fp=A2*0.5-0.35*run*Math.max(0,-Math.cos(q)), toe=vadd(an,[0.21*Math.cos(fp),0,-0.21*Math.sin(fp)-0.02]);
+    const an=vadd(kn,vsc(d2,0.44)), fp=A2+0.3-0.4*run*Math.max(0,-Math.cos(q)), toe=vadd(an,[0.21*Math.sin(fp),0,-0.21*Math.cos(fp)-0.02]);
     J.legs.push({s,hp,kn,an,toe});
   }
   let minZ=Math.min(J.legs[0].an[2],J.legs[1].an[2]);
