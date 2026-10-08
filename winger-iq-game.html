@@ -1469,6 +1469,7 @@ function drawBall(b,tt){
 const NEAR_B=0.15;
 const LIGHTS=[[-5,-52,38],[110,-52,38],[-5,52,38],[110,52,38]];
 const LDIR=(()=>{const v=[0.25,-0.35,0.9],l=Math.hypot(...v);return v.map(x=>x/l);})();
+const NEAR_DETAIL_R=7; /* players within this many metres of the camera get a denser torso/shorts shell (12 sides instead of 8) when GFX.hi is on */
 const HAIR=['#1b1410','#2b1a10','#3a2414','#0f0c0a','#5a3b20','#c9a36a'];
 const SHC={};
 function shade(hex,f){
@@ -1567,8 +1568,12 @@ function buildBody(id,tt,ok){
     if(P.hh>0.01){ el=vlerp(el,vadd(sh,[0.06,s*0.25,0.12]),P.hh); hd=vlerp(hd,vadd(Hd,[0.02,s*0.1,0.07]),P.hh); }
     J.arms.push({s,sh,el,hd});
   }
-  // torso and shorts boxes (local)
-  const ring=(c,f,rx,rd)=>{ const o=[]; for(let i=0;i<8;i++){ const th=(i+0.5)*Math.PI/4; o.push(vadd(c,vadd(vsc(f,Math.cos(th)*rd),[0,Math.sin(th)*rx,0]))); } return o; };
+  // torso and shorts boxes (local). Close players get a denser ring (12 sides
+  // instead of 8): at typical sizes 8 reads as round, but once a player fills
+  // much of the view the facets become visible, so spend the extra vertices
+  // only where the camera is actually close enough to notice.
+  const nSides=(GFX.hi&&Math.hypot(pos[0]-cam.x,pos[1]-cam.y)<NEAR_DETAIL_R)?12:8;
+  const ring=(c,f,rx,rd,n=nSides)=>{ const o=[]; for(let i=0;i<n;i++){ const th=(i+0.5)*Math.PI*2/n; o.push(vadd(c,vadd(vsc(f,Math.cos(th)*rd),[0,Math.sin(th)*rx,0]))); } return o; };
   const breath=reduceMotion?0:Math.sin(tt*2.2+e.n)*0.004*(1-run);
   J.rings=[ring(vadd(Pv,vsc(up,0.03)),fw,0.15,0.1), ring(vadd(Pv,vsc(up,0.33)),fw,0.195+breath,0.125+breath), ring(vadd(Pv,vsc(up,0.5)),fw,0.2,0.1)];
   J.srings=[ring([0,0,hip+0.05],[1,0,0],0.16,0.11), ring([0,0,hip-0.19],[1,0,0],0.175,0.12)];
@@ -1635,32 +1640,47 @@ function capsulePath(s1,s2,R1,R2,ang,nx,ny){
   ctx.lineTo(s1[0]-nx*R1,s1[1]-ny*R1);
   ctx.arc(s1[0],s1[1],R1,ang-Math.PI/2,ang+Math.PI/2,true); ctx.closePath();
 }
-/* a tapered, shaded limb segment: radius r1 at a, r2 at b (metres) */
-function taper(a,b,r1,r2,col,hi){
+/* a tapered, lit limb segment: radius r1 at a, r2 at b (metres). rawHex is the
+   unshaded base colour; baseF/hiF are the shade factors the caller used to use
+   directly — now modulated by how much this segment actually faces the key
+   light, the same way shell() lights flat torso faces, so limbs stay flat and
+   round-looking (vs. a fixed highlight) no matter which way they're turned. */
+function taper(a,b,r1,r2,rawHex,baseF,hiF){
   let p=camPt(a[0],a[1],a[2]), q=camPt(b[0],b[1],b[2]);
   if(p[1]<NEAR_B&&q[1]<NEAR_B) return;
   if(p[1]<NEAR_B){const u=(NEAR_B-p[1])/(q[1]-p[1]);p=[p[0]+(q[0]-p[0])*u,NEAR_B,p[2]+(q[2]-p[2])*u];r1=lerp(r1,r2,u);}
   if(q[1]<NEAR_B){const u=(NEAR_B-q[1])/(p[1]-q[1]);q=[q[0]+(p[0]-q[0])*u,NEAR_B,q[2]+(p[2]-q[2])*u];r2=lerp(r2,r1,u);}
   const s1=proj(p),s2=proj(q),R1=Math.max(0.5,r1*F/p[1]),R2=Math.max(0.5,r2*F/q[1]);
   const dx=s2[0]-s1[0],dy=s2[1]-s1[1],L=Math.hypot(dx,dy);
-  ctx.fillStyle=col;
+  let ld=0.5;
+  if(GFX.hi){
+    const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,mz=(a[2]+b[2])/2;
+    const axl=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])||1, ax=[(b[0]-a[0])/axl,(b[1]-a[1])/axl,(b[2]-a[2])/axl];
+    let tc=[cam.x-mx,cam.y-my,cam.z-mz]; const tcl=Math.hypot(...tc)||1; tc=[tc[0]/tcl,tc[1]/tcl,tc[2]/tcl];
+    const axDot=ax[0]*tc[0]+ax[1]*tc[1]+ax[2]*tc[2];
+    let n=[tc[0]-ax[0]*axDot,tc[1]-ax[1]*axDot,tc[2]-ax[2]*axDot]; const nl=Math.hypot(...n)||1; n=[n[0]/nl,n[1]/nl,n[2]/nl];
+    ld=Math.max(0,n[0]*LDIR[0]+n[1]*LDIR[1]+n[2]*LDIR[2]);
+  }
+  const lf=0.85+0.3*ld;
+  ctx.fillStyle=sh(rawHex,baseF*lf);
   if(L<0.6){ ctx.beginPath(); ctx.arc(s1[0],s1[1],Math.max(R1,R2),0,7); ctx.fill(); return; }
   const ang=Math.atan2(dy,dx),nx=-dy/L,ny=dx/L;
   capsulePath(s1,s2,R1,R2,ang,nx,ny); ctx.fill();
-  if(hi&&GFX.hi&&Math.max(R1,R2)>2.2){
+  if(hiF&&GFX.hi&&Math.max(R1,R2)>2.2){
     const sg=ny<0?1:-1,o=0.42;
-    ctx.globalAlpha=0.45; ctx.fillStyle=hi;
+    ctx.globalAlpha=0.3+0.35*ld; ctx.fillStyle=sh(rawHex,hiF*(0.95+0.25*ld));
     capsulePath([s1[0]+nx*R1*o*sg,s1[1]+ny*R1*o*sg],[s2[0]+nx*R2*o*sg,s2[1]+ny*R2*o*sg],R1*0.42,R2*0.42,ang,nx,ny); ctx.fill();
     ctx.globalAlpha=1;
   }
 }
 /* rounded shell (8 sides) through a list of rings; optional number on the back */
 function shell(rings,col,opt){
-  const cen=rings.map(r=>r.reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0])), faces=[];
+  const nV=rings[0].length, half=Math.floor(nV/2);
+  const cen=rings.map(r=>r.reduce((a,p)=>vadd(a,vsc(p,1/nV)),[0,0,0])), faces=[];
   for(let bI=0;bI<rings.length-1;bI++){
     const ac=vlerp(cen[bI],cen[bI+1],0.5);
-    for(let k=0;k<8;k++){
-      const k2=(k+1)%8, quad=[rings[bI][k],rings[bI][k2],rings[bI+1][k2],rings[bI+1][k]];
+    for(let k=0;k<nV;k++){
+      const k2=(k+1)%nV, quad=[rings[bI][k],rings[bI][k2],rings[bI+1][k2],rings[bI+1][k]];
       const fc=[0,0,0]; quad.forEach(p=>{fc[0]+=p[0]/4;fc[1]+=p[1]/4;fc[2]+=p[2]/4;});
       const n=[fc[0]-ac[0],fc[1]-ac[1],fc[2]-ac[2]], nl=Math.hypot(...n)||1;
       if(n[0]*(cam.x-fc[0])+n[1]*(cam.y-fc[1])+n[2]*(cam.z-fc[2])<=0) continue;
@@ -1679,17 +1699,17 @@ function shell(rings,col,opt){
     worldPoly(top,sh(col,1.0)); worldPoly(top.map(p=>vlerp(tc,p,0.45)),sh(opt.trim||col,0.9));
   }
   if(opt&&opt.num!=null){
-    const backVis=faces.some(f=>f.k===3&&f.bI===1);
+    const backVis=faces.some(f=>f.k===half-1&&f.bI===1);
     if(backVis){
-      const mt=vlerp(rings[2][3],rings[2][4],0.5), mb=vlerp(rings[0][3],rings[0][4],0.5);
+      const mt=vlerp(rings[2][half-1],rings[2][half],0.5), mb=vlerp(rings[0][half-1],rings[0][half],0.5);
       const A=camPt(...mt),B=camPt(...mb);
       if(A[1]>0.4&&B[1]>0.4){ const a=proj(A),b=proj(B),h=Math.hypot(a[0]-b[0],a[1]-b[1]);
         if(h>12){ ctx.fillStyle=opt.numCol; ctx.font=`800 ${Math.round(h*0.4)}px "Barlow Condensed","Arial Narrow",sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
           ctx.fillText(opt.num,a[0]*0.42+b[0]*0.58,a[1]*0.42+b[1]*0.58); } }
     }
-    const frontVis=faces.some(f=>f.k===7&&f.bI===1);
+    const frontVis=faces.some(f=>f.k===nV-1&&f.bI===1);
     if(frontVis&&opt.trim){ // small crest on the chest
-      const cp=vadd(vlerp(rings[1][7],rings[1][0],0.5),[0,0,0.06]), C=camPt(...cp);
+      const cp=vadd(vlerp(rings[1][nV-1],rings[1][0],0.5),[0,0,0.06]), C=camPt(...cp);
       if(C[1]>0.4){ const c=proj(C), r=0.03*F/C[1]; if(r>1.2){ ctx.fillStyle=opt.trim; ctx.beginPath(); ctx.arc(c[0],c[1],r,0,7); ctx.fill(); } }
     }
   }
@@ -1736,28 +1756,28 @@ function drawBody(J,o){
   for(const lg of J.legs){
     const m1=vlerp(lg.hp,lg.kn,0.4), calf=vlerp(lg.kn,lg.an,0.35), sockTop=vlerp(lg.kn,lg.an,0.08);
     parts.push({d:dep(vlerp(lg.hp,lg.kn,0.5)),f:()=>{
-      taper(lg.hp,m1,0.105,0.095,sh(k.shorts,1),sh(k.shorts,1.25));
-      taper(m1,lg.kn,0.086,0.058,sh(skin,1),sh(skin,1.22)); }});
+      taper(lg.hp,m1,0.105,0.095,k.shorts,1,1.25);
+      taper(m1,lg.kn,0.086,0.058,skin,1,1.22); }});
     parts.push({d:dep(vlerp(lg.kn,lg.an,0.5)),f:()=>{
-      taper(lg.kn,sockTop,0.058,0.058,sh(trim,1));
-      taper(sockTop,calf,0.058,0.067,sh(k.socks,1),sh(k.socks,1.25));
-      taper(calf,lg.an,0.067,0.038,sh(k.socks,1),sh(k.socks,1.2));
-      taper(lg.an,lg.toe,0.046,0.034,sh(o.boots||'#15171a',1),sh(o.boots||'#15171a',1.6)); }});
+      taper(lg.kn,sockTop,0.058,0.058,trim,1);
+      taper(sockTop,calf,0.058,0.067,k.socks,1,1.25);
+      taper(calf,lg.an,0.067,0.038,k.socks,1,1.2);
+      taper(lg.an,lg.toe,0.046,0.034,o.boots||'#15171a',1,1.6); }});
   }
   for(const ar of J.arms){
     if(o.hideArms) continue;
     const sl=vlerp(ar.sh,ar.el,0.48), cuff=vlerp(ar.sh,ar.el,0.55);
     parts.push({d:dep(vlerp(ar.sh,ar.el,0.5)),f:()=>{
-      taper(ar.sh,sl,0.074,0.06,sh(k.shirt,1),sh(k.shirt,1.22));
-      taper(sl,cuff,0.06,0.056,sh(trim,1));
-      taper(cuff,ar.el,0.054,0.044,sh(skin,1),sh(skin,1.2)); }});
+      taper(ar.sh,sl,0.074,0.06,k.shirt,1,1.22);
+      taper(sl,cuff,0.06,0.056,trim,1);
+      taper(cuff,ar.el,0.054,0.044,skin,1,1.2); }});
     parts.push({d:dep(vlerp(ar.el,ar.hd,0.5)),f:()=>{
-      taper(ar.el,ar.hd,0.045,0.035,sh(skin,1),sh(skin,1.2));
-      taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],0.25)),o.gloves?0.058:0.04,o.gloves?0.05:0.032,sh(o.gloves||skin,1)); }});
+      taper(ar.el,ar.hd,0.045,0.035,skin,1,1.2);
+      taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],0.25)),o.gloves?0.058:0.04,o.gloves?0.05:0.032,o.gloves||skin,1); }});
   }
   const tc=J.rings[1].reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0]);
   if(!o.hideTorso) parts.push({d:dep(tc),f:()=>{ shell(J.srings,k.shorts); shell(J.rings,k.shirt,{num:o.num,numCol:k.num,trim,cap:true,bright:true}); }});
-  if(!o.hideHead) parts.push({d:dep(J.H)-0.05,f:()=>{ taper(J.C,vadd(J.N,[0,0,0.04]),0.058,0.05,sh(skin,0.92)); head(J.H,J.headYaw,skin,o.hair,o.style); }});
+  if(!o.hideHead) parts.push({d:dep(J.H)-0.05,f:()=>{ taper(J.C,vadd(J.N,[0,0,0.04]),0.058,0.05,skin,0.92); head(J.H,J.headYaw,skin,o.hair,o.style); }});
   parts.sort((a,b)=>b.d-a.d);
   for(const p of parts) p.f();
   if(!o.mine&&!o.hideTorso){

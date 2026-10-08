@@ -60,7 +60,7 @@ Card tiers: bronze below 65, silver 65–79, gold 80 and up. Badges: Shoulder ch
 
 ## 6. Rendering notes
 - Athletes are 3D skeletons: running cycle, jockey and side-on stances with a staggered lead foot, pointing, kicks with wind-up, headers, keeper dives, celebrations, hands on head, leaning when accelerating or braking, idle sway.
-- Bodies are tapered, shaded limbs plus a rounded 8-sided torso and shorts, with kit trim, a number on the back, a chest crest, ears, simple faces and four hairstyles.
+- Bodies are tapered, shaded limbs plus a rounded 8-sided torso and shorts, with kit trim, a number on the back, a chest crest, ears, simple faces and four hairstyles. Limb shading (`taper()`) is lit the same way the torso is: a real per-segment dot product against the key light (`LDIR`), not a fixed highlight, so limbs read as round and respond to orientation. Players within `NEAR_DETAIL_R` (7m) of the camera get a denser torso/shorts shell (12-sided instead of 8) when `GFX.hi` is on — the extra vertices are spent only where the camera is close enough to actually notice, so the cost never scales with how many players are on the pitch. Both are no-ops on Low (`GFX.hi` off): lighting falls back to the original flat shade, ring count stays at 8.
 - In first person you see your own legs, and the camera dips to watch your kicks and first touches. Your arms are hidden because they looked like blobs that close to the camera.
 - To make teams readable: shirts keep bright colours under shading, distant players fade only slightly, each player has a soft team-coloured glow underneath, and distant shirts never shrink below a few pixels.
 - Graphics Auto drops to Low (one shadow, no highlights, standard resolution) if frames get slow.
