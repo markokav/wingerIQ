@@ -1673,6 +1673,16 @@ function taper(a,b,r1,r2,rawHex,baseF,hiF){
     ctx.globalAlpha=1;
   }
 }
+/* a boot: ankle to toe, same as taper() but closer to uniform width (a shoe
+   isn't a cone) and capped with a flattened toe/sole ellipse instead of a
+   point, so it reads as a blunt shoe rather than a traffic cone. */
+function drawBoot(a,b,rawHex,baseF,hiF){
+  taper(a,b,0.05,0.045,rawHex,baseF,hiF);
+  const q=camPt(b[0],b[1],b[2]); if(q[1]<NEAR_B) return;
+  const s=proj(q), rp=0.05*F/q[1]; if(rp<1) return;
+  ctx.fillStyle=sh(rawHex,baseF*0.88);
+  ctx.beginPath(); ctx.ellipse(s[0],s[1],rp*1.2,rp*0.62,0,0,7); ctx.fill();
+}
 /* rounded shell (8 sides) through a list of rings; optional number on the back */
 function shell(rings,col,opt){
   const nV=rings[0].length, half=Math.floor(nV/2);
@@ -1762,7 +1772,7 @@ function drawBody(J,o){
       taper(lg.kn,sockTop,0.058,0.058,trim,1);
       taper(sockTop,calf,0.058,0.067,k.socks,1,1.25);
       taper(calf,lg.an,0.067,0.038,k.socks,1,1.2);
-      taper(lg.an,lg.toe,0.046,0.034,o.boots||'#15171a',1,1.6); }});
+      drawBoot(lg.an,lg.toe,o.boots||'#15171a',1,1.6); }});
   }
   for(const ar of J.arms){
     if(o.hideArms) continue;
