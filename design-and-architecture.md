@@ -1,5 +1,5 @@
 # Winger IQ: design and architecture
- 
+
 ## 1. What the game is
 A first-person decision trainer for young wingers (target age 10–14). Each scenario:
 1. **Kick-off screen**: short match context (minute, score), how to play, mode switch.
@@ -29,7 +29,7 @@ Everything lives in `winger-iq-game.html`: CSS, HTML and one script. The main co
 
 ## 4. Writing a scenario
 Coordinates are in metres. `x` runs 0→105 towards the goal we attack; `y` is lateral, with positive values towards the right touchline (y = 34). Times are written **without** the 2.5 s pre-roll; `addPreRoll` shifts everything later automatically.
- 
+
 Main fields:
 - `id`, `title`, `sub`, `context`, `minute`, `score:[us,them]`
 - `freeze`: when the decision moment is reached (slow-motion starts 0.45 s before it).
@@ -46,9 +46,9 @@ Main fields:
 - `opts.A–D`: `label`, `aim` (tap target: `{kind, who | at, z?, alt?}`), `verdict`, `result`, `why`, `beats` (captions `[t,text]`), `end`, `resultAt`, `paths` (continuations after the freeze), `ball` (segments after the freeze).
 
 **Version 2** (`TWISTS[id]`) is written as differences only: replaced player paths, poses, shouts, marks, cues, stance, hints, rule, counter, best, and per-option overrides. `makeTwist` deep-copies version 1 and applies them.
- 
+
 **Which version is shown:** the first play of a scenario is version 1, the second is version 2, then random. Results are stored per version id (`overlap`, `overlap-b`, …).
- 
+
 ## 5. Ratings and the Football IQ card
 After every real attempt, each stat moves 40% of the way towards a target:
 - **VIS** = 40 + 59 × share of key players spotted
@@ -57,7 +57,7 @@ After every real attempt, each stat moves 40% of the way towards a target:
 - **AWR** = 45, plus 27 for a shoulder check, plus 27 for spotting the player a shout pointed to
 
 Card tiers: bronze below 65, silver 65–79, gold 80 and up. Badges: Shoulder check, Big brain (best decision), Ice cold (best decision made fast), Eagle eye (all key players spotted).
- 
+
 ## 6. Rendering notes
 - Athletes are 3D skeletons: running cycle, jockey and side-on stances with a staggered lead foot, pointing, kicks with wind-up, headers, keeper dives, celebrations, hands on head, leaning when accelerating or braking, idle sway.
 - Bodies are tapered, shaded limbs plus a rounded 8-sided torso and shorts, with kit trim, a number on the back, a chest crest, ears, simple faces and four hairstyles.
@@ -85,4 +85,20 @@ Card tiers: bronze below 65, silver 65–79, gold 80 and up. Badges: Shoulder ch
 - Maximum 16 MB, one self-contained file.
 - Scripts may only load from cdnjs, jsdelivr, the Tailwind CDN or jQuery's CDN; fonts only from Google Fonts. Nothing else can load: no remote images, models or API calls.
 - localStorage works but stays on that device only.
- 
+
+## 10. Player profiles, progression and privacy
+
+No login or accounts yet — see `PRIVACY.md` for the full privacy notice and the GDPR reasoning behind this design.
+
+**Storage.** Profiles live in `localStorage` under `wingerIQ.profiles.v1` (an array of player objects) plus `wingerIQ.activeId.v1` (which one is active). A profile created before this system existed is migrated automatically from the old single-profile key (`wingerIQ.v1`) the first time the game loads. Each profile carries a `schemaVersion` so future saves can be migrated safely, and a randomly generated `id` (`genId()`) that is not derived from the name or anything real-world — kept pseudonymous in case a future opt-in sync feature needs one, without retrofitting it onto existing data.
+
+**Remembering players without login.** If there's exactly one saved profile, the game boots straight into it — zero extra friction, same as before this system existed. If there are two or more, a "Who's playing?" picker (`openPicker()`) appears at boot, and again from "Switch player" in the card modal. Picking a tile makes it the active `player`; a "+" tile creates a new one through the existing onboarding flow. No password: this solves "remember multiple players on a shared device," not authentication.
+
+**Progression**, added to the existing `stats`/`badges`/`results`/`plays` fields:
+- `trophies`: whole-number score that only ever goes up — awarded per real attempt in `applyStats()`: 15 for `best` (+5 more if it was the harder "twist"/version‑2 variant, since spotting the changed cue is the actual skill being taught), 5 for `okay`, 0 for `poor`/`too slow`. It never decreases: there's no matchmaking here to balance, unlike the games (e.g. Brawl Stars) this was modelled on, so a push/pull mechanic would only ever discourage retrying.
+- `rank` (derived, not stored): a football-themed name from `RANKS`/`rankOf()` — Grassroots → Academy → Club Prospect → First Team → International — based on lifetime `trophies`. Deliberately different wording from the bronze/silver/gold card tier (`tierOf()`), which is a skill *snapshot* (rolling average of VIS/DEC/SPD/AWR), so the two numbers can't be confused for each other.
+- `xp`/`level` (derived via `levelOf()`): +1 `xp` per real attempt regardless of verdict; rewards practice on its own axis, separate from skill or trophies.
+- `streak`: consecutive `best` decisions; resets on anything else. Crossing 3 and 6 earns the `streak3`/`streak6` badges (lifetime, like the existing badges — earned once, never removed).
+- `unlocks` + `TROPHY_ROAD`: trophy milestones (50/150/300/600/1000) unlock a card-trim cosmetic (`trim-copper`/`-slate`/`-amber`/`-emerald`/`-diamond`, a CSS `filter:drop-shadow` glow on the FUT card) rather than re-gating the kit colours, which stay free at character creation as before. The highest unlocked trim is applied automatically; there's no picker for it yet (see `roadmap.md`).
+
+**Privacy controls**, reachable from onboarding, the card modal, and the player picker: "Export my data" downloads the active profile as JSON; "Delete my data" removes it from this device permanently (with a confirmation) and reloads. No new field here is ever sent anywhere — these controls only read and write `localStorage`.
