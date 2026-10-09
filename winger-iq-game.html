@@ -320,8 +320,8 @@ const KITS=[
   {id:'sky',shirt:'#3cc8ff',shorts:'#ffffff',socks:'#3cc8ff',num:'#0a2540',trim:'#0a2540'},
   {id:'purple',shirt:'#8a4dff',shorts:'#ffffff',socks:'#8a4dff',num:'#ffffff',trim:'#ffffff'}
 ];
-const OPP_RED={shirt:'#ff2b2b',trim:'#ffffff',shorts:'#111317',socks:'#ff2b2b',num:'#ffffff'};
-const OPP_WHITE={shirt:'#ffffff',trim:'#111317',shorts:'#111317',socks:'#ffffff',num:'#111317'};
+const OPP_RED={shirt:'#ff2b2b',trim:'#ffffff',shorts:'#3a4048',socks:'#ff2b2b',num:'#ffffff'};
+const OPP_WHITE={shirt:'#ffffff',trim:'#3a4048',shorts:'#3a4048',socks:'#ffffff',num:'#3a4048'};
 const GK_Y={shirt:'#c8ff00',trim:'#111317',shorts:'#111317',socks:'#c8ff00',num:'#111317'};
 const GK_G={shirt:'#00e5a0',trim:'#06362a',shorts:'#111317',socks:'#00e5a0',num:'#111317'};
 
@@ -1666,11 +1666,17 @@ function taper(a,b,r1,r2,rawHex,baseF){
   // reads clearly at a glance and at small (phone) size, unlike a soft blend.
   const band=ld>0.66?1.15:ld>0.33?0.95:0.8;
   ctx.fillStyle=sh(rawHex,baseF*band);
+  // outline scales WITH the shape's own screen size, not a fixed pixel width:
+  // on a close/large limb that's a bold border; on a small distant one, a
+  // fixed-width border would be thicker than the limb itself and swallow the
+  // kit colour that's supposed to tell teams apart. ow(..) below is shared
+  // with drawBoot()/head() for the same reason.
+  const ow=Math.max(0.5,Math.min(1.7,Math.max(R1,R2)*0.22));
   if(L<0.6){ ctx.beginPath(); ctx.arc(s1[0],s1[1],Math.max(R1,R2),0,7); ctx.fill();
-    ctx.lineWidth=1.6; ctx.strokeStyle=OUTLINE; ctx.stroke(); return; }
+    ctx.lineWidth=ow; ctx.strokeStyle=OUTLINE; ctx.stroke(); return; }
   const ang=Math.atan2(dy,dx),nx=-dy/L,ny=dx/L;
   capsulePath(s1,s2,R1,R2,ang,nx,ny); ctx.fill();
-  ctx.lineWidth=1.6; ctx.strokeStyle=OUTLINE; ctx.stroke();
+  ctx.lineWidth=ow; ctx.strokeStyle=OUTLINE; ctx.stroke();
 }
 /* a boot: ankle to toe, same as taper() but closer to uniform width (a shoe
    isn't a cone) and capped with a flattened toe/sole ellipse instead of a
@@ -1681,7 +1687,7 @@ function drawBoot(a,b,rawHex,baseF){
   const s=proj(q), rp=0.05*F/q[1]; if(rp<1) return;
   ctx.fillStyle=sh(rawHex,baseF*0.88);
   ctx.beginPath(); ctx.ellipse(s[0],s[1],rp*1.2,rp*0.62,0,0,7); ctx.fill();
-  ctx.lineWidth=1.6; ctx.strokeStyle=OUTLINE; ctx.stroke();
+  ctx.lineWidth=Math.max(0.5,Math.min(1.7,rp*0.26)); ctx.strokeStyle=OUTLINE; ctx.stroke();
 }
 /* rounded shell (8 sides) through a list of rings; optional number on the back */
 function shell(rings,col,opt){
@@ -1741,7 +1747,7 @@ function head(Hp,ang,skin,hair,style){
   if((style===2||style===3)&&r>2){ const v=camPt(Hp[0]-fx*0.02,Hp[1]-fy*0.02,Hp[2]+(style===2?0.05:0.065)); if(v[1]>NEAR_B){ const vs=proj(v); ctx.fillStyle=hair; ctx.beginPath(); ctx.ellipse(vs[0],vs[1],r*(style===2?1.14:1.0),r*(style===2?1.14:0.8),0,0,7); ctx.fill(); } }
   // head with a slight jaw taper
   ctx.fillStyle=sh(skin,1); ctx.beginPath(); ctx.ellipse(s[0],s[1],r*0.92,r*1.06,0,0,7); ctx.fill();
-  ctx.lineWidth=Math.max(1.4,r*0.09); ctx.strokeStyle=OUTLINE; ctx.stroke();
+  ctx.lineWidth=Math.max(0.5,Math.min(1.7,r*0.16)); ctx.strokeStyle=OUTLINE; ctx.stroke();
   if(r>4&&GFX.hi){ ctx.fillStyle=sh(skin,0.82); ctx.globalAlpha=0.35; ctx.beginPath(); ctx.ellipse(s[0],s[1]+r*0.55,r*0.62,r*0.42,0,0,Math.PI); ctx.fill(); ctx.globalAlpha=1; }
   if(r<2.5) return;
   const ho=camPt(Hp[0]-fx*0.05,Hp[1]-fy*0.05,Hp[2]+(style===1?0.035:style===3?0.07:0.055));
@@ -1776,7 +1782,7 @@ function drawBody(J,o){
       taper(lg.kn,sockTop,0.058,0.058,trim,1);
       taper(sockTop,calf,0.058,0.067,k.socks,1);
       taper(calf,lg.an,0.067,0.038,k.socks,1);
-      drawBoot(lg.an,lg.toe,o.boots||'#15171a',1); }});
+      drawBoot(lg.an,lg.toe,o.boots||'#2e333b',1); }});
   }
   for(const ar of J.arms){
     if(o.hideArms) continue;
@@ -1959,7 +1965,7 @@ function render(){
     }
     items.push({kind:'p',id,J,depth:mine?0.01:c[1],sx:sf[0],sy:sf[1],s:F/Math.max(0.3,c[1]),mine,
       o:{kit,num:id==='me'?player.num:e.n,skin:SKIN[(e.n*3+idx+(e.team==='them'?1:0))%SKIN.length],hair:HAIR[(e.n+idx)%HAIR.length],style:(e.n+idx*2)%4,
-         gloves:e.team==='gk'?'#f4f4f0':null,hideHead:mine,hideArms:mine,hideTorso:mine,mine,boots:['#15171a','#f4f4f0','#e8452a','#15171a','#2c7be5'][(e.n+idx)%5]}});
+         gloves:e.team==='gk'?'#f4f4f0':null,hideHead:mine,hideArms:mine,hideTorso:mine,mine,boots:['#2e333b','#f4f4f0','#e8452a','#2e333b','#2c7be5'][(e.n+idx)%5]}});
   }
   // floodlight shadows first (on the grass), then bodies and ball by distance
   for(const it of items) if(!it.mine) bodyShadows(it.J,GFX.lights);
