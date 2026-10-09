@@ -24,11 +24,12 @@
 7. **20-second tutorial** play that teaches dragging to look and tapping.
 8. **More content**: 20–30 scenarios in levels, then other positions (full-back, number 10, striker).
 9. **Trophy-road trim picker**: let a player choose among their unlocked card trims instead of always showing the highest one; maybe a celebration-animation variant too (needs renderer work, not just CSS).
+10. **Portrait layout**: on a true narrow-portrait phone (checked at 400×860), the first-person stage — which naturally wants a wide field of view, like any sports view — is squeezed into a fairly short strip at the top, with the decision panel stacked below it taking most of the vertical space. That shrinks players further on top of the recognizability problem the bold/flat/outlined character redesign addresses. Worth checking whether the stage can claim more vertical space in portrait (e.g. the panel text collapsing/scrolling under it instead of pushing it up) before assuming character art alone has solved "hard to recognize on phone."
 
 ## Business
-10. **Accounts and a coach dashboard**: team codes, each player's VIS/DEC/SPD/AWR, homework sets. This is the main revenue idea (clubs pay). It needs a small server and parental consent for under-16s — follow the "if this ever changes" section of `PRIVACY.md` before building it; the local profile `id` is already pseudonymous so sync can opt in per profile without affecting players who don't.
-11. **Privacy-friendly usage numbers**: completion, return visits, most-replayed scenarios.
-12. **Ads**: sponsor boards that are the same for everyone, with child-appropriate brands only. The EU Digital Services Act bans profiling-based ads to minors.
+11. **Accounts and a coach dashboard**: team codes, each player's VIS/DEC/SPD/AWR, homework sets. This is the main revenue idea (clubs pay). It needs a small server and parental consent for under-16s — follow the "if this ever changes" section of `PRIVACY.md` before building it; the local profile `id` is already pseudonymous so sync can opt in per profile without affecting players who don't.
+12. **Privacy-friendly usage numbers**: completion, return visits, most-replayed scenarios.
+13. **Ads**: sponsor boards that are the same for everyone, with child-appropriate brands only. The EU Digital Services Act bans profiling-based ads to minors.
 
 ## Graphics options (decided: polish first, done)
 Next step up, if kids want more: a WebGL engine with rigged, motion-captured players (one shared body model and about 10 shared animations). It needs licensed character assets and its own hosting. Keep the current renderer as a fallback for weak devices.

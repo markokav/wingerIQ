@@ -1470,6 +1470,7 @@ const NEAR_B=0.15;
 const LIGHTS=[[-5,-52,38],[110,-52,38],[-5,52,38],[110,52,38]];
 const LDIR=(()=>{const v=[0.25,-0.35,0.9],l=Math.hypot(...v);return v.map(x=>x/l);})();
 const NEAR_DETAIL_R=7; /* players within this many metres of the camera get a denser torso/shorts shell (12 sides instead of 8) when GFX.hi is on */
+const OUTLINE='#14100a'; /* bold outline colour for players — same ink already used for text on the gold UI chips, so characters read as part of the same bold, flat visual language as the rest of the game, not a softer/separate style */
 const HAIR=['#1b1410','#2b1a10','#3a2414','#0f0c0a','#5a3b20','#c9a36a'];
 const SHC={};
 function shade(hex,f){
@@ -1645,7 +1646,7 @@ function capsulePath(s1,s2,R1,R2,ang,nx,ny){
    directly — now modulated by how much this segment actually faces the key
    light, the same way shell() lights flat torso faces, so limbs stay flat and
    round-looking (vs. a fixed highlight) no matter which way they're turned. */
-function taper(a,b,r1,r2,rawHex,baseF,hiF){
+function taper(a,b,r1,r2,rawHex,baseF){
   let p=camPt(a[0],a[1],a[2]), q=camPt(b[0],b[1],b[2]);
   if(p[1]<NEAR_B&&q[1]<NEAR_B) return;
   if(p[1]<NEAR_B){const u=(NEAR_B-p[1])/(q[1]-p[1]);p=[p[0]+(q[0]-p[0])*u,NEAR_B,p[2]+(q[2]-p[2])*u];r1=lerp(r1,r2,u);}
@@ -1661,27 +1662,26 @@ function taper(a,b,r1,r2,rawHex,baseF,hiF){
     let n=[tc[0]-ax[0]*axDot,tc[1]-ax[1]*axDot,tc[2]-ax[2]*axDot]; const nl=Math.hypot(...n)||1; n=[n[0]/nl,n[1]/nl,n[2]/nl];
     ld=Math.max(0,n[0]*LDIR[0]+n[1]*LDIR[1]+n[2]*LDIR[2]);
   }
-  const lf=0.85+0.3*ld;
-  ctx.fillStyle=sh(rawHex,baseF*lf);
-  if(L<0.6){ ctx.beginPath(); ctx.arc(s1[0],s1[1],Math.max(R1,R2),0,7); ctx.fill(); return; }
+  // flat/toon shading: a few bold bands instead of a continuous gradient —
+  // reads clearly at a glance and at small (phone) size, unlike a soft blend.
+  const band=ld>0.66?1.15:ld>0.33?0.95:0.8;
+  ctx.fillStyle=sh(rawHex,baseF*band);
+  if(L<0.6){ ctx.beginPath(); ctx.arc(s1[0],s1[1],Math.max(R1,R2),0,7); ctx.fill();
+    ctx.lineWidth=1.6; ctx.strokeStyle=OUTLINE; ctx.stroke(); return; }
   const ang=Math.atan2(dy,dx),nx=-dy/L,ny=dx/L;
   capsulePath(s1,s2,R1,R2,ang,nx,ny); ctx.fill();
-  if(hiF&&GFX.hi&&Math.max(R1,R2)>2.2){
-    const sg=ny<0?1:-1,o=0.42;
-    ctx.globalAlpha=0.3+0.35*ld; ctx.fillStyle=sh(rawHex,hiF*(0.95+0.25*ld));
-    capsulePath([s1[0]+nx*R1*o*sg,s1[1]+ny*R1*o*sg],[s2[0]+nx*R2*o*sg,s2[1]+ny*R2*o*sg],R1*0.42,R2*0.42,ang,nx,ny); ctx.fill();
-    ctx.globalAlpha=1;
-  }
+  ctx.lineWidth=1.6; ctx.strokeStyle=OUTLINE; ctx.stroke();
 }
 /* a boot: ankle to toe, same as taper() but closer to uniform width (a shoe
    isn't a cone) and capped with a flattened toe/sole ellipse instead of a
    point, so it reads as a blunt shoe rather than a traffic cone. */
-function drawBoot(a,b,rawHex,baseF,hiF){
-  taper(a,b,0.05,0.045,rawHex,baseF,hiF);
+function drawBoot(a,b,rawHex,baseF){
+  taper(a,b,0.05,0.045,rawHex,baseF);
   const q=camPt(b[0],b[1],b[2]); if(q[1]<NEAR_B) return;
   const s=proj(q), rp=0.05*F/q[1]; if(rp<1) return;
   ctx.fillStyle=sh(rawHex,baseF*0.88);
   ctx.beginPath(); ctx.ellipse(s[0],s[1],rp*1.2,rp*0.62,0,0,7); ctx.fill();
+  ctx.lineWidth=1.6; ctx.strokeStyle=OUTLINE; ctx.stroke();
 }
 /* rounded shell (8 sides) through a list of rings; optional number on the back */
 function shell(rings,col,opt){
@@ -1696,11 +1696,14 @@ function shell(rings,col,opt){
       if(n[0]*(cam.x-fc[0])+n[1]*(cam.y-fc[1])+n[2]*(cam.z-fc[2])<=0) continue;
       const tcx=cam.x-fc[0],tcy=cam.y-fc[1],tcz=cam.z-fc[2],tcl=Math.hypot(tcx,tcy,tcz)||1;
       const ld=Math.max(0,(n[0]*LDIR[0]+n[1]*LDIR[1]+n[2]*LDIR[2])/nl), vd=Math.max(0,(n[0]*tcx+n[1]*tcy+n[2]*tcz)/(nl*tcl));
-      const lit=(opt&&opt.bright)?0.8+0.16*ld+0.2*vd:0.52+0.34*ld+0.36*vd;
+      // flat/toon bands instead of a continuous gradient, same reasoning as
+      // taper(): reads as bold flat colour at a glance instead of a soft blend.
+      const raw=(opt&&opt.bright)?0.8+0.16*ld+0.2*vd:0.52+0.34*ld+0.36*vd;
+      const lit=(opt&&opt.bright)?(raw>1.0?1.14:raw>0.9?0.98:0.86):(raw>1.0?1.15:raw>0.75?0.92:0.68);
       faces.push({quad,lit,k,bI});
     }
   }
-  for(const f of faces){ const c=sh(col,f.lit); worldPoly(f.quad,c,c); }
+  for(const f of faces){ const c=sh(col,f.lit); worldPoly(f.quad,c,OUTLINE); }
   if(opt&&opt.trimBand!=null){ // a thin trim stripe around the bottom ring (sleeve-like hem)
   }
   const top=rings[rings.length-1], tc=cen[cen.length-1], bc=cen[cen.length-2];
@@ -1738,6 +1741,7 @@ function head(Hp,ang,skin,hair,style){
   if((style===2||style===3)&&r>2){ const v=camPt(Hp[0]-fx*0.02,Hp[1]-fy*0.02,Hp[2]+(style===2?0.05:0.065)); if(v[1]>NEAR_B){ const vs=proj(v); ctx.fillStyle=hair; ctx.beginPath(); ctx.ellipse(vs[0],vs[1],r*(style===2?1.14:1.0),r*(style===2?1.14:0.8),0,0,7); ctx.fill(); } }
   // head with a slight jaw taper
   ctx.fillStyle=sh(skin,1); ctx.beginPath(); ctx.ellipse(s[0],s[1],r*0.92,r*1.06,0,0,7); ctx.fill();
+  ctx.lineWidth=Math.max(1.4,r*0.09); ctx.strokeStyle=OUTLINE; ctx.stroke();
   if(r>4&&GFX.hi){ ctx.fillStyle=sh(skin,0.82); ctx.globalAlpha=0.35; ctx.beginPath(); ctx.ellipse(s[0],s[1]+r*0.55,r*0.62,r*0.42,0,0,Math.PI); ctx.fill(); ctx.globalAlpha=1; }
   if(r<2.5) return;
   const ho=camPt(Hp[0]-fx*0.05,Hp[1]-fy*0.05,Hp[2]+(style===1?0.035:style===3?0.07:0.055));
@@ -1766,23 +1770,23 @@ function drawBody(J,o){
   for(const lg of J.legs){
     const m1=vlerp(lg.hp,lg.kn,0.4), calf=vlerp(lg.kn,lg.an,0.35), sockTop=vlerp(lg.kn,lg.an,0.08);
     parts.push({d:dep(vlerp(lg.hp,lg.kn,0.5)),f:()=>{
-      taper(lg.hp,m1,0.105,0.095,k.shorts,1,1.25);
-      taper(m1,lg.kn,0.086,0.058,skin,1,1.22); }});
+      taper(lg.hp,m1,0.105,0.095,k.shorts,1);
+      taper(m1,lg.kn,0.086,0.058,skin,1); }});
     parts.push({d:dep(vlerp(lg.kn,lg.an,0.5)),f:()=>{
       taper(lg.kn,sockTop,0.058,0.058,trim,1);
-      taper(sockTop,calf,0.058,0.067,k.socks,1,1.25);
-      taper(calf,lg.an,0.067,0.038,k.socks,1,1.2);
-      drawBoot(lg.an,lg.toe,o.boots||'#15171a',1,1.6); }});
+      taper(sockTop,calf,0.058,0.067,k.socks,1);
+      taper(calf,lg.an,0.067,0.038,k.socks,1);
+      drawBoot(lg.an,lg.toe,o.boots||'#15171a',1); }});
   }
   for(const ar of J.arms){
     if(o.hideArms) continue;
     const sl=vlerp(ar.sh,ar.el,0.48), cuff=vlerp(ar.sh,ar.el,0.55);
     parts.push({d:dep(vlerp(ar.sh,ar.el,0.5)),f:()=>{
-      taper(ar.sh,sl,0.074,0.06,k.shirt,1,1.22);
+      taper(ar.sh,sl,0.074,0.06,k.shirt,1);
       taper(sl,cuff,0.06,0.056,trim,1);
-      taper(cuff,ar.el,0.054,0.044,skin,1,1.2); }});
+      taper(cuff,ar.el,0.054,0.044,skin,1); }});
     parts.push({d:dep(vlerp(ar.el,ar.hd,0.5)),f:()=>{
-      taper(ar.el,ar.hd,0.045,0.035,skin,1,1.2);
+      taper(ar.el,ar.hd,0.045,0.035,skin,1);
       taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],0.25)),o.gloves?0.058:0.04,o.gloves?0.05:0.032,o.gloves||skin,1); }});
   }
   const tc=J.rings[1].reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0]);
