@@ -1440,7 +1440,8 @@ function drawBoards(){
   for(const b of BOARDS){
     // dark board body first, then the LED face
     worldPoly([b.tl,b.tr,[b.tr[0],b.tr[1],0],[b.tl[0],b.tl[1],0]],'#0b0f14');
-    adQuad(b.tl,b.tr,adCanvases[(b.i+step)%adCanvases.length],flick);
+    const n=adCanvases.length, idx=((b.i+step)%n+n)%n;
+    adQuad(b.tl,b.tr,adCanvases[idx],flick);
   }
 }
 function drawGoal(){
@@ -1712,11 +1713,6 @@ function shell(rings,col,opt){
   for(const f of faces){ const c=sh(col,f.lit); worldPoly(f.quad,c,OUTLINE); }
   if(opt&&opt.trimBand!=null){ // a thin trim stripe around the bottom ring (sleeve-like hem)
   }
-  const top=rings[rings.length-1], tc=cen[cen.length-1], bc=cen[cen.length-2];
-  const upv=[tc[0]-bc[0],tc[1]-bc[1],tc[2]-bc[2]];
-  if(opt&&opt.cap&&upv[0]*(cam.x-tc[0])+upv[1]*(cam.y-tc[1])+upv[2]*(cam.z-tc[2])>0){
-    worldPoly(top,sh(col,1.0)); worldPoly(top.map(p=>vlerp(tc,p,0.45)),sh(opt.trim||col,0.9));
-  }
   if(opt&&opt.num!=null){
     const backVis=faces.some(f=>f.k===half-1&&f.bI===1);
     if(backVis){
@@ -1796,7 +1792,7 @@ function drawBody(J,o){
       taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],0.25)),o.gloves?0.058:0.04,o.gloves?0.05:0.032,o.gloves||skin,1); }});
   }
   const tc=J.rings[1].reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0]);
-  if(!o.hideTorso) parts.push({d:dep(tc),f:()=>{ shell(J.srings,k.shorts); shell(J.rings,k.shirt,{num:o.num,numCol:k.num,trim,cap:true,bright:true}); }});
+  if(!o.hideTorso) parts.push({d:dep(tc),f:()=>{ shell(J.srings,k.shorts); shell(J.rings,k.shirt,{num:o.num,numCol:k.num,trim,bright:true}); }});
   if(!o.hideHead) parts.push({d:dep(J.H)-0.05,f:()=>{ taper(J.C,vadd(J.N,[0,0,0.04]),0.058,0.05,skin,0.92); head(J.H,J.headYaw,skin,o.hair,o.style); }});
   parts.sort((a,b)=>b.d-a.d);
   for(const p of parts) p.f();
@@ -1875,8 +1871,9 @@ let decideClock=0, beatClock=0, headYaw=0, headPitch=0, smoothYaw=0;
 let spotted={}, seen={}, pips={}, shoulder=false;
 let flyClock=0, flyFrom=null, flash=0, tapFx=null;
 let lastPlay=null, lastResultInfo=null;
+let briefClock=0;
 const anim={};
-const OUT_SPEED=0.72, FLY_T=1.3;
+const OUT_SPEED=0.72, FLY_T=1.3, BRIEF_FLY_T=2.2;
 const slowRate=()=>0.45/(player.mode==='pro'?2.2:7);
 const decideWindow=()=>player.mode==='pro'?2.2:7;
 
@@ -1925,19 +1922,25 @@ function tvPose(u){
 function tvTarget(tt){ const b=ballAt(S,tt,opt), m=posOf(S,'me',tt,opt); return [lerp(b[0],m[0],0.25)+3,lerp(b[1],m[1],0.25)]; }
 function lerpPose(a,b,u){ return {x:lerp(a.x,b.x,u),y:lerp(a.y,b.y,u),z:lerp(a.z,b.z,u),yaw:a.yaw+angDiff(a.yaw,b.yaw)*u,pitch:lerp(a.pitch,b.pitch,u),cy:lerp(a.cy,b.cy,u),fov:lerp(a.fov,b.fov,u)}; }
 function replaySpan(){ return [S.freeze-1.6, S.opts[opt].end+0.3]; }
+/* brief-phase establishing shot: pan from a broadcast-style wide angle down into
+   the kickoff first-person view, so a scenario reads as "here's the situation"
+   instead of a static loading screen. Settles into povPose() and holds there if
+   the player reads the brief text longer than the pan takes. */
+function briefPose(u){ return lerpPose(tvPose(0),povPose(),ease(u)); }
 
 /* ================= Render ================= */
 function render(){
   if(!W) return;
   ctx.setTransform(DPR,0,0,DPR,0,0);
   const ok=sceneOpt();
-  let pose;
+  let pose, briefU=1;
   if(phase==='fly'){ pose=lerpPose(flyFrom,tvPose(0),ease(clamp(flyClock/FLY_T,0,1))); }
   else if(phase==='replay'||phase==='result'){ const [a,b]=replaySpan(); pose=tvPose(clamp((t-a)/(b-a),0,1)); }
+  else if(phase==='brief'){ briefU=clamp(briefClock/BRIEF_FLY_T,0,1); pose=briefPose(briefU); }
   else pose=povPose();
   if(pose.fov!==HFOV&&shake>0&&!reduceMotion){ pose.yaw+=Math.sin(wall*61)*0.012*shake; pose.pitch+=Math.cos(wall*53)*0.008*shake; }
   setCam(pose); F=(W/2)/Math.tan(pose.fov/2);
-  const tv=phase==='fly'||phase==='replay'||phase==='result';
+  const tv=phase==='fly'||phase==='replay'||phase==='result'||(phase==='brief'&&briefU<1);
   const K=kitsNow();
 
   drawBackground(wall); drawPitch(); drawBoards(); drawGoal();
@@ -2149,6 +2152,7 @@ function loadScenario(i){
   el.opts.innerHTML='';
   for(const k in S.opts){ const b=document.createElement('button'); b.className='opt'; b.textContent=S.opts[k].label; b.addEventListener('click',()=>choose(k)); el.opts.appendChild(b); }
   phase='brief'; t=0; opt=null; auto=null; pending=null; late=false; deciding=false; headYaw=0;
+  briefClock=0; tvLook=tvTarget(0);
   resetAnim(); updateAnim(0.016,null);
   el.brief.hidden=false; el.rcard.hidden=true; el.timer.classList.remove('on','late'); setHint('');
   showPanel('play'); renderChips(); refreshHeader(); setScore(false); bulge=null;
@@ -2430,7 +2434,7 @@ $('#pvDelete').addEventListener('click',()=>{
 /* ================= Main loop ================= */
 let last=performance.now();
 function frame(now){
-  const dt=Math.min(0.05,(now-last)/1000); last=now; wall+=dt;
+  const dt=Math.max(0,Math.min(0.05,(now-last)/1000)); last=now; wall+=dt;
   // head turning with keys, and the head drifting back to the body
   if(phase==='play'){
     const kd=(keys.ArrowLeft||keys.a||keys.A?-1:0)+(keys.ArrowRight||keys.d||keys.D?1:0);
@@ -2491,6 +2495,8 @@ function frame(now){
     updateAnim(t-before,opt); fireEvents(before,t,opt);
     const tg=tvTarget(t), kk=Math.min(1,dt*2.2); tvLook=[lerp(tvLook[0],tg[0],kk),lerp(tvLook[1],tg[1],kk)];
     if(t>=replaySpan()[1]) showResult();
+  } else if(phase==='brief'){
+    briefClock+=dt;
   }
   if(flash>0) flash=Math.max(0,flash-dt*2.2);
   if(shake>0) shake=Math.max(0,shake-dt*2.4);
