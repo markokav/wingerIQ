@@ -1519,6 +1519,12 @@ function updatePose(id,tt,ok,sdt){
   const k=Math.min(1,sdt*9);
   for(const key in T) P[key]+=(T[key]-P[key])*k;
 }
+/* a staggered/side-on stance (see 'sideon' in updatePose) only used to widen the
+   front-back gap between the legs, never the side-to-side one, and the ankle
+   tracked in under the knee the same way it does mid-stride - from some camera
+   angles that read as crossed legs. legWiden/hipOff/ankleOut below keep a
+   staggered stance visually apart regardless of viewing angle. */
+const LEG_WIDEN=0.20, HIP_OFF=0.12, ARM_UP=0.29, ARM_LO=0.27, HAND_R=[0.045,0.036], HAND_EXT=0.28;
 function buildBody(id,tt,ok){
   const e=S.ents[id], a=anim[id]||{ph:0,run:0,speed:0,fx:1,fy:0}, P=a.p||{lean:0,crouch:0,side:0,up:0,hh:0,pt:0,stag:0};
   const pos=posOf(S,id,tt,ok), ball=ballAt(S,tt,ok), ev=eventsFor(ok), run=a.run, ph=a.ph;
@@ -1538,7 +1544,7 @@ function buildBody(id,tt,ok){
   for(const s of [-1,1]){
     const q=ph+(s>0?Math.PI:0);
     const spd=clamp(a.speed/7,0,1);
-    let A=(0.45+0.3*spd)*run*Math.sin(q)+P.crouch*0.32+(P.stag||0)*s*0.3, K=0.06+run*(0.25+(0.8+0.6*spd)*Math.max(0,-Math.cos(q)))+P.crouch*0.62, B=0.05+P.crouch*0.14;
+    let A=(0.45+0.3*spd)*run*Math.sin(q)+P.crouch*0.32+(P.stag||0)*s*0.3, K=0.06+run*(0.25+(0.8+0.6*spd)*Math.max(0,-Math.cos(q)))+P.crouch*0.62, B=0.05+P.crouch*0.14+Math.abs(P.stag||0)*LEG_WIDEN;
     if(kick){
       const u=(tt-kick.t)/0.3;
       if(s>0){
@@ -1547,8 +1553,9 @@ function buildBody(id,tt,ok){
         else { const w=clamp((u-0.6)/0.9,0,1); A=lerp(1.25,A,w); K=lerp(0.1,K,w); }
       } else { A=0.12; K=0.28; }
     }
-    const hp=[0,s*0.1,hip], d1=[Math.sin(A)*Math.cos(B),s*Math.sin(B),-Math.cos(A)*Math.cos(B)];
-    const kn=vadd(hp,vsc(d1,0.46)), A2=A-K, d2=[Math.sin(A2)*Math.cos(B),s*Math.sin(B)*0.5,-Math.cos(A2)*Math.cos(B)];
+    const ankleOut=0.5+0.5*Math.abs(P.stag||0); // a running stride lets the ankle track in under the knee; a planted/staggered stance needs the foot to stay out as wide as the knee, or it reads as crossed
+    const hp=[0,s*HIP_OFF,hip], d1=[Math.sin(A)*Math.cos(B),s*Math.sin(B),-Math.cos(A)*Math.cos(B)];
+    const kn=vadd(hp,vsc(d1,0.46)), A2=A-K, d2=[Math.sin(A2)*Math.cos(B),s*Math.sin(B)*ankleOut,-Math.cos(A2)*Math.cos(B)];
     const an=vadd(kn,vsc(d2,0.44)), fp=A2+0.3-0.4*run*Math.max(0,-Math.cos(q)), toe=vadd(an,[0.21*Math.sin(fp),0,-0.21*Math.cos(fp)-0.02]);
     J.legs.push({s,hp,kn,an,toe});
   }
@@ -1560,9 +1567,9 @@ function buildBody(id,tt,ok){
     Fl=lerp(Fl,2.8,upX); Ab=lerp(Ab,0.38,upX); E=lerp(E,0.15,upX);
     const sh=vadd(Cn,[-0.02,s*0.2,-0.04]);
     const d=[Math.sin(Fl)*Math.cos(Ab),s*Math.sin(Ab),-Math.cos(Fl)*Math.cos(Ab)];
-    let el=vadd(sh,vsc(d,0.29));
+    let el=vadd(sh,vsc(d,ARM_UP));
     const d2=[Math.sin(Fl+E)*Math.cos(Ab),s*Math.sin(Ab),-Math.cos(Fl+E)*Math.cos(Ab)];
-    let hd=vadd(el,vsc(d2,0.27));
+    let hd=vadd(el,vsc(d2,ARM_LO));
     if(P.hh>0.01){ el=vlerp(el,vadd(sh,[0.06,s*0.25,0.12]),P.hh); hd=vlerp(hd,vadd(Hd,[0.02,s*0.1,0.07]),P.hh); }
     J.arms.push({s,sh,el,hd});
   }
@@ -1801,7 +1808,7 @@ function drawBody(J,o){
       taper(cuff,ar.el,0.054,0.044,skin,1); }});
     parts.push({d:dep(vlerp(ar.el,ar.hd,0.5)),f:()=>{
       taper(ar.el,ar.hd,0.045,0.035,skin,1);
-      taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],0.25)),o.gloves?0.058:0.04,o.gloves?0.05:0.032,o.gloves||skin,1); }});
+      taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],HAND_EXT)),o.gloves?0.058:HAND_R[0],o.gloves?0.05:HAND_R[1],o.gloves||skin,1); }});
   }
   const tc=J.rings[1].reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0]);
   if(!o.hideTorso) parts.push({d:dep(tc),f:()=>{ shell(J.srings,k.shorts); shell(J.rings,k.shirt,{num:o.num,numCol:k.num,trim,bright:true}); }});
