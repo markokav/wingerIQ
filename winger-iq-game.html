@@ -1922,16 +1922,21 @@ function replaySpan(){ return [S.freeze-1.6, S.opts[opt].end+0.3]; }
    moves, then pans/zooms down into the first-person kickoff view while short
    caption lines deliver the situation, like a quick broadcast stinger. */
 function overviewPose(){
+  // bounding box over every outfield entity's kickoff (t=0) position, both teams,
+  // so a deep runner (like an overlapping full-back) is never left out of frame
   let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
   for(const id in S.ents){
     if(S.ents[id].team==='gk') continue;
     const p=posOf(S,id,0,null);
     minX=Math.min(minX,p[0]); maxX=Math.max(maxX,p[0]); minY=Math.min(minY,p[1]); maxY=Math.max(maxY,p[1]);
   }
-  const cx=(minX+maxX)/2, cy=(minY+maxY)/2, spanY=Math.max(18,maxY-minY);
-  const side=cy>=0?1:-1, camY=cy+side*(spanY*0.75+34), camZ=27;
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2, spanX=Math.max(14,maxX-minX), spanY=Math.max(18,maxY-minY);
+  const fov=(W/H<1?64:54)*D2R;
+  const distForWidth=(spanX/2+6)/Math.tan(fov/2); // enough distance so the full lengthwise spread still fits the lens
+  const dist=Math.max(spanY*0.75+34,distForWidth);
+  const side=cy>=0?1:-1, camY=cy+side*dist, camZ=27;
   const dx=0, dy=cy-camY;
-  return {x:cx,y:camY,z:camZ,yaw:Math.atan2(dy,dx),pitch:Math.atan2(camZ,Math.hypot(dx,dy))*0.92,cy:H*0.5,fov:(W/H<1?64:54)*D2R};
+  return {x:cx,y:camY,z:camZ,yaw:Math.atan2(dy,dx),pitch:Math.atan2(camZ,Math.hypot(dx,dy))*0.92,cy:H*0.5,fov};
 }
 function introPose(u){
   const holdU=Math.min(0.42,HOLD_T/introT);
@@ -1994,6 +1999,18 @@ function render(){
   if(bc[1]>NEAR_B&&bg[1]>NEAR_B){ const s1=proj(bc),s2=proj(bg); items.push({kind:'b',depth:bc[1]-0.05,sx:s1[0],sy:s1[1],shx:s2[0],shy:s2[1],s:F/bc[1]}); }
   items.sort((a,b)=>b.depth-a.depth);
   for(const it of items) it.kind==='p'?drawBody(it.J,it.o):drawBall(it,t);
+  // team-colour pips during the intro overview: a fixed-size dot above each head so
+  // kit colour reads at any distance, with the key scenario players (and you) ringed
+  // gold so the player who matters - like a runner coming from deep - stands out.
+  if(phase==='intro'){
+    for(const it of items){
+      if(it.kind!=='p') continue;
+      const y=it.sy-it.s*2.3, isKey=it.id==='me'||S.marks.some(m=>m.id===it.id);
+      ctx.beginPath(); ctx.arc(it.sx,y,isKey?7:5.5,0,7);
+      ctx.fillStyle=it.o.kit.shirt; ctx.fill();
+      ctx.lineWidth=isKey?2.2:1.2; ctx.strokeStyle=isKey?'#ffc81e':'rgba(10,14,18,.65)'; ctx.stroke();
+    }
+  }
   // ball trail on fast balls
   if(trail.length>2&&(phase==='outcome'||phase==='replay')){
     ctx.lineCap='round';
