@@ -148,6 +148,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .fut-stats em.up{color:#0f6b2e} .fut-stats em.down{color:#9c1d10}
 .fut-tier{position:absolute;bottom:13%;left:0;right:0;text-align:center;font-weight:800;font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.7}
 .bug{position:absolute;left:10px;top:12px;z-index:1;display:flex;align-items:stretch;border-radius:8px;overflow:hidden;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:800;font-size:17px;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none}
+.bug[hidden]{display:none}
 .bug span{display:flex;align-items:center;padding:6px 8px}
 .bug .min{background:#0f151b;color:#ffc81e}
 .bug .tm{color:#fff;gap:6px}
@@ -1882,9 +1883,9 @@ let decideClock=0, beatClock=0, headYaw=0, headPitch=0, smoothYaw=0;
 let spotted={}, seen={}, pips={}, shoulder=false;
 let flyClock=0, flyFrom=null, flash=0, tapFx=null;
 let lastPlay=null, lastResultInfo=null;
-let introClock=0, introT=1.6, introBeats=[];
+let introClock=0, introT=1.6, diagramT=2.6;
 const anim={};
-const OUT_SPEED=0.72, FLY_T=1.3, INTRO_LINE_T=0.68, HOLD_T=0.9;
+const OUT_SPEED=0.72, FLY_T=1.3, PAN_T=1.1;
 const slowRate=()=>0.45/(player.mode==='pro'?2.2:7);
 const decideWindow=()=>player.mode==='pro'?2.2:7;
 
@@ -1933,14 +1934,15 @@ function tvPose(u){
 function tvTarget(tt){ const b=ballAt(S,tt,opt), m=posOf(S,'me',tt,opt); return [lerp(b[0],m[0],0.25)+3,lerp(b[1],m[1],0.25)]; }
 function lerpPose(a,b,u){ return {x:lerp(a.x,b.x,u),y:lerp(a.y,b.y,u),z:lerp(a.z,b.z,u),yaw:a.yaw+angDiff(a.yaw,b.yaw)*u,pitch:lerp(a.pitch,b.pitch,u),cy:lerp(a.cy,b.cy,u),fov:lerp(a.fov,b.fov,u)}; }
 function replaySpan(){ return [S.freeze-1.6, S.opts[opt].end+0.3]; }
-/* intro establishing shot: a FIFA-style side-on wide camera holds on the whole
-   local shape (both teams near the ball) so the shape reads before anything
-   moves, then pans/zooms down into the first-person kickoff view while short
-   caption lines deliver the situation, like a quick broadcast stinger. */
+/* intro: a flat tactical diagram (like a broadcast "tactics cam" graphic before
+   a corner) holds first, giving the player real reading time on a 2D layout
+   that's legible by construction - no camera distance or lighting to fight.
+   It then cuts to a short 3D camera pan down into the first-person kickoff
+   view, as a connective, cinematic moment into the game. */
 // the handful of players who actually matter for this decision: you, plus every
 // scenario-marked player (the ones the replay later quizzes you on, like a deep
-// overlapping run). The intro only frames and draws these - showing the whole XI
-// at a distance that fits them all would shrink everyone to unreadable flecks.
+// overlapping run). The diagram and the pan's starting shot only show these -
+// showing the whole XI would shrink everyone to unreadable flecks.
 function relevantIds(){ return ['me',...S.marks.map(m=>m.id)].filter(id=>S.ents[id]); }
 function overviewPose(){
   let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
@@ -1957,28 +1959,82 @@ function overviewPose(){
   const dx=0, dy=cy-camY;
   return {x:cx,y:camY,z:camZ,yaw:Math.atan2(dy,dx),pitch:Math.atan2(camZ,Math.hypot(dx,dy))*0.92,cy:H*0.5,fov};
 }
-function introPose(u){
-  const holdU=Math.min(0.42,HOLD_T/introT);
-  if(u<=holdU) return overviewPose();
-  return lerpPose(overviewPose(),povPose(),ease(clamp((u-holdU)/(1-holdU),0,1)));
+function introPose(u){ return lerpPose(overviewPose(),povPose(),ease(u)); }
+function diagramIntroText(){
+  const tw=VARIANT[S.base];
+  return `You're #${player.num} on the right wing. ${S.context}`+(tw?' This play has two versions: read the picture before you choose!':'');
 }
-function introLines(){
-  const lines=[`#${player.num} • RIGHT WING`];
-  S.context.split(/(?<=[.!?])\s+/).forEach(s=>{ s=s.trim(); if(s) lines.push(s); });
-  if(VARIANT[S.base]) lines.push('Two versions: read the picture!');
-  return lines.slice(0,5);
+/* flat, non-perspective top-down pitch diagram: every relevant player plotted
+   by true world position at a fixed on-screen size, so legibility never
+   competes with camera distance or lighting the way the 3D view does. */
+function diagramRect(){
+  const padX=Math.min(34,W*0.05), topY=68, botY=H-118;
+  return {x:padX,y:topY,w:W-padX*2,h:Math.max(80,botY-topY)};
+}
+function diagramMap(){
+  let minX=1e9,maxX=-1e9;
+  for(const id of relevantIds()){ const p=posOf(S,id,0,null); minX=Math.min(minX,p[0]); maxX=Math.max(maxX,p[0]); }
+  const pad=9, x0=clamp(minX-pad,0,105), x1=clamp(maxX+pad,0,105), spanX=Math.max(26,x1-x0);
+  const xMid=(x0+x1)/2, xLo=clamp(xMid-spanX/2,0,105-spanX), xHi=xLo+spanX;
+  const r=diagramRect(), scale=Math.min(r.w/spanX,r.h/68);
+  const ox=r.x+(r.w-spanX*scale)/2, oy=r.y+(r.h-68*scale)/2;
+  return { toXY:(wx,wy)=>[ox+(wx-xLo)*scale, oy+(wy+34)*scale], scale, xLo, xHi, rect:r };
+}
+function drawTacticalDiagram(u){
+  const fade=u<0.12?u/0.12:u>0.88?(1-u)/0.12:1;
+  ctx.globalAlpha=clamp(fade,0,1);
+  ctx.fillStyle='#0c1118'; ctx.fillRect(0,0,W,H);
+  const M=diagramMap(), r=M.rect;
+  ctx.fillStyle='#1d5c32'; rr(ctx,r.x,r.y,r.w,r.h,10); ctx.fill();
+  ctx.save(); rr(ctx,r.x,r.y,r.w,r.h,10); ctx.clip();
+  ctx.strokeStyle='rgba(238,243,236,.65)'; ctx.lineWidth=2;
+  const seg=(x1,y1,x2,y2)=>{ const a=M.toXY(x1,y1),b=M.toXY(x2,y2); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); };
+  const arc=(cx,cy,rad,a0,a1)=>{ ctx.beginPath(); for(let i=0;i<=24;i++){ const a=a0+(a1-a0)*i/24, p=M.toXY(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad); i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); } ctx.stroke(); };
+  seg(0,34,105,34); seg(0,-34,105,-34); seg(0,-34,0,34); seg(105,-34,105,34); seg(52.5,-34,52.5,34);
+  arc(52.5,0,9.15,0,Math.PI*2);
+  seg(88.5,-20.16,88.5,20.16); seg(88.5,-20.16,105,-20.16); seg(88.5,20.16,105,20.16);
+  seg(99.5,-9.16,99.5,9.16); seg(99.5,-9.16,105,-9.16); seg(99.5,9.16,105,9.16);
+  ctx.restore();
+  // place labels first (seeded with every token's own footprint so a pill never
+  // lands under a *different* player's token), then draw every token on top,
+  // so a circle+number is never obscured by another player's label text.
+  const K=kitsNow(), placed=[], tokens=relevantIds().map(id=>{
+    const e=S.ents[id], p=posOf(S,id,0,null), [sx,sy]=M.toXY(p[0],p[1]);
+    return {id,e,sx,sy,kit:e.team==='us'?K.us:e.team==='gk'?K.gk:K.them,num:id==='me'?player.num:e.n};
+  });
+  for(const tk of tokens) placed.push([tk.sx-15,tk.sy-15,30,30]);
+  for(const tk of tokens){
+    const mark=S.marks.find(m=>m.id===tk.id);
+    if(mark) pill(tk.sx,tk.sy-26,mark.label,'rgba(10,14,20,.88)','#f4f5f1',12,placed);
+  }
+  for(const tk of tokens){
+    ctx.beginPath(); ctx.arc(tk.sx,tk.sy,14,0,7); ctx.fillStyle=tk.kit.shirt; ctx.fill();
+    ctx.lineWidth=tk.id==='me'?3:2; ctx.strokeStyle=tk.id==='me'?'#ffc81e':'rgba(10,14,20,.7)'; ctx.stroke();
+    ctx.fillStyle=tk.kit.num; ctx.font='800 13px "Barlow Condensed",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(tk.num,tk.sx,tk.sy+1);
+  }
+  ctx.fillStyle='#f4f5f1'; ctx.textAlign='center'; ctx.font='800 22px "Barlow Condensed",sans-serif';
+  ctx.fillText(`${S.title.toUpperCase()}: ${S.sub.toUpperCase()}`,W/2,40);
+  ctx.font='600 16px "Barlow",sans-serif';
+  const maxW=Math.min(W-48,620), words=diagramIntroText().split(' '), lines=[]; let ln='';
+  for(const w of words){ const test=ln?ln+' '+w:w; if(ctx.measureText(test).width>maxW&&ln){lines.push(ln);ln=w;} else ln=test; }
+  lines.push(ln);
+  lines.forEach((l,i)=>ctx.fillText(l,W/2,H-88+i*21));
+  ctx.globalAlpha=1;
 }
 
 /* ================= Render ================= */
 function render(){
   if(!W) return;
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  const inDiagram=phase==='intro'&&introClock<diagramT;
+  el.bug.hidden=inDiagram; // the diagram draws its own minute/score line, so the floating scoreboard would otherwise sit on top of the title text
+  if(inDiagram){ drawTacticalDiagram(clamp(introClock/diagramT,0,1)); return; }
   const ok=sceneOpt();
   let pose, introU=1;
   if(phase==='fly'){ pose=lerpPose(flyFrom,tvPose(0),ease(clamp(flyClock/FLY_T,0,1))); }
   else if(phase==='replay'||phase==='result'){ const [a,b]=replaySpan(); pose=tvPose(clamp((t-a)/(b-a),0,1)); }
   else if(phase==='brief'){ pose=tvPose(0); }
-  else if(phase==='intro'){ introU=clamp(introClock/introT,0,1); pose=introPose(introU); }
+  else if(phase==='intro'){ introU=clamp((introClock-diagramT)/PAN_T,0,1); pose=introPose(introU); }
   else pose=povPose();
   if(pose.fov!==HFOV&&shake>0&&!reduceMotion){ pose.yaw+=Math.sin(wall*61)*0.012*shake; pose.pitch+=Math.cos(wall*53)*0.008*shake; }
   setCam(pose); F=(W/2)/Math.tan(pose.fov/2);
@@ -2068,12 +2124,6 @@ function render(){
   vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,deciding&&!pending&&phase==='play'?'rgba(0,0,0,.62)':'rgba(0,0,0,.4)');
   ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
 
-  // captions during the intro stinger
-  if(phase==='intro'){
-    let cur=null,idx=-1;
-    introBeats.forEach((b,i)=>{ if(introClock>=b[0]){cur=b;idx=i;} });
-    if(cur) caption(cur[1],clamp((introClock-cur[0])/0.2,0,1),introBeats.length,idx);
-  }
   // captions during the play-out
   if(phase==='outcome'){
     const info=optInfo(); let cur=null,idx=-1;
@@ -2169,7 +2219,7 @@ function drawMarkers(){
 }
 
 /* ================= Flow ================= */
-const el={hint:$('#hint'),timer:$('#timer'),timerFill:$('#timerFill'),brief:$('#brief'),rcard:$('#rcard'),
+const el={hint:$('#hint'),timer:$('#timer'),timerFill:$('#timerFill'),brief:$('#brief'),rcard:$('#rcard'),bug:$('#bug'),
   pPlay:$('#pPlay'),pReview:$('#pReview'),fallback:$('#fallback'),opts:$('#opts'),playHead:$('#playHead'),playText:$('#playText')};
 let hintKey='';
 function setHint(text,nudge){ const key=(text||'')+(nudge?'!':''); if(key===hintKey) return; hintKey=key; el.hint.textContent=text||''; el.hint.classList.toggle('on',!!text); el.hint.classList.toggle('nudge',!!nudge); }
@@ -2212,9 +2262,11 @@ function showPanel(which){
 }
 function startIntro(){
   Snd.init(); Snd.resume();
-  const lines=introLines();
-  introBeats=lines.map((txt,i)=>[i*INTRO_LINE_T,txt]);
-  introT=lines.length*INTRO_LINE_T+0.65;
+  // enough hold time to actually read the diagram and its text, not a TikTok flash -
+  // paced off word count (~170 reading words/min, generously slowed for a diagram too)
+  const words=diagramIntroText().split(/\s+/).length;
+  diagramT=clamp(1.6+words*0.16,2.6,5.2);
+  introT=diagramT+PAN_T;
   introClock=0; phase='intro'; el.brief.hidden=true;
   Snd.tap();
 }
