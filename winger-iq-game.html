@@ -1975,8 +1975,11 @@ function overviewPose(){
   const cx=(minX+maxX)/2, cy=(minY+maxY)/2, spanX=Math.max(10,maxX-minX), spanY=Math.max(12,maxY-minY);
   const fov=(W/H<1?64:54)*D2R;
   const distForWidth=(spanX/2+5)/Math.tan(fov/2); // enough distance so the full lengthwise spread still fits the lens
-  const dist=Math.max(spanY*0.75+20,distForWidth);
-  const side=cy>=0?1:-1, camY=cy+side*dist, camZ=16;
+  // tight enough that the farthest relevant player still reads as a person,
+  // not a speck - this wide shot has to double as "can you tell the shirts
+  // apart", not just "does everyone technically fit in frame"
+  const dist=Math.max(spanY*0.55+10,distForWidth);
+  const side=cy>=0?1:-1, camY=cy+side*dist, camZ=11;
   const dx=0, dy=cy-camY;
   return {x:cx,y:camY,z:camZ,yaw:Math.atan2(dy,dx),pitch:Math.atan2(camZ,Math.hypot(dx,dy))*0.92,cy:H*0.5,fov};
 }
