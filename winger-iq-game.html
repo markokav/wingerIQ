@@ -1789,7 +1789,10 @@ function drawBody(J,o){
   const dist=Math.hypot(J.pos[0]-cam.x,J.pos[1]-cam.y);
   BDIM=o.mine?1:clamp(1.05-dist/300,0.9,1.04); // only a touch of haze, so kits stay readable far away
   for(const lg of J.legs){
-    const m1=vlerp(lg.hp,lg.kn,0.4), calf=vlerp(lg.kn,lg.an,0.35), sockTop=vlerp(lg.kn,lg.an,0.08);
+    // shorts need to stay visibly over the top of the thigh through a full kick
+    // swing, not just a relaxed standing pose - 0.4 left bare skin showing at
+    // the hip the moment the leg swung forward during a shot's follow-through.
+    const m1=vlerp(lg.hp,lg.kn,0.58), calf=vlerp(lg.kn,lg.an,0.35), sockTop=vlerp(lg.kn,lg.an,0.08);
     parts.push({d:dep(vlerp(lg.hp,lg.kn,0.5)),f:()=>{
       taper(lg.hp,m1,0.105,0.095,k.shorts,1);
       taper(m1,lg.kn,0.086,0.058,skin,1); }});
@@ -1801,7 +1804,9 @@ function drawBody(J,o){
   }
   for(const ar of J.arms){
     if(o.hideArms) continue;
-    const sl=vlerp(ar.sh,ar.el,0.48), cuff=vlerp(ar.sh,ar.el,0.55);
+    // same reasoning as the shorts: the sleeve needs margin for a raised or
+    // swung arm, or the shoulder socket shows as bare skin past the collar.
+    const sl=vlerp(ar.sh,ar.el,0.6), cuff=vlerp(ar.sh,ar.el,0.67);
     parts.push({d:dep(vlerp(ar.sh,ar.el,0.5)),f:()=>{
       taper(ar.sh,sl,0.074,0.06,k.shirt,1);
       taper(sl,cuff,0.06,0.056,trim,1);
