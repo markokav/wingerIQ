@@ -1788,13 +1788,23 @@ function drawBody(J,o){
   const dep=p=>camPt(p[0],p[1],p[2])[1];
   const dist=Math.hypot(J.pos[0]-cam.x,J.pos[1]-cam.y);
   BDIM=o.mine?1:clamp(1.05-dist/300,0.9,1.04); // only a touch of haze, so kits stay readable far away
+  // the torso/shorts shell paints as one object at one depth (its centre), so a
+  // whole limb segment sorts either fully in front of it or fully behind - there's
+  // no way to have a capsule's own near end poke out while its far end tucks in.
+  // A hip or shoulder socket barely moves relative to the torso even when the
+  // limb swings hard (it's the bone beyond the joint that travels), so pinning
+  // just the small stub right at the joint to the torso's own depth keeps that
+  // attachment point reliably under the fabric, while the rest of the limb keeps
+  // sorting on its own real position - still free to swing in front when it should.
+  const tc=J.rings[1].reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0]), torsoDep=dep(tc)+0.35;
   for(const lg of J.legs){
     // shorts need to stay visibly over the top of the thigh through a full kick
     // swing, not just a relaxed standing pose - 0.4 left bare skin showing at
     // the hip the moment the leg swung forward during a shot's follow-through.
-    const m1=vlerp(lg.hp,lg.kn,0.58), calf=vlerp(lg.kn,lg.an,0.35), sockTop=vlerp(lg.kn,lg.an,0.08);
-    parts.push({d:dep(vlerp(lg.hp,lg.kn,0.5)),f:()=>{
-      taper(lg.hp,m1,0.105,0.095,k.shorts,1);
+    const hipStub=vlerp(lg.hp,lg.kn,0.15), m1=vlerp(lg.hp,lg.kn,0.58), calf=vlerp(lg.kn,lg.an,0.35), sockTop=vlerp(lg.kn,lg.an,0.08);
+    parts.push({d:torsoDep,f:()=>{ taper(lg.hp,hipStub,0.105,0.102,k.shorts,1); }});
+    parts.push({d:dep(vlerp(hipStub,lg.kn,0.5)),f:()=>{
+      taper(hipStub,m1,0.102,0.095,k.shorts,1);
       taper(m1,lg.kn,0.086,0.058,skin,1); }});
     parts.push({d:dep(vlerp(lg.kn,lg.an,0.5)),f:()=>{
       taper(lg.kn,sockTop,0.058,0.058,trim,1);
@@ -1806,16 +1816,16 @@ function drawBody(J,o){
     if(o.hideArms) continue;
     // same reasoning as the shorts: the sleeve needs margin for a raised or
     // swung arm, or the shoulder socket shows as bare skin past the collar.
-    const sl=vlerp(ar.sh,ar.el,0.6), cuff=vlerp(ar.sh,ar.el,0.67);
-    parts.push({d:dep(vlerp(ar.sh,ar.el,0.5)),f:()=>{
-      taper(ar.sh,sl,0.074,0.06,k.shirt,1);
+    const shStub=vlerp(ar.sh,ar.el,0.15), sl=vlerp(ar.sh,ar.el,0.6), cuff=vlerp(ar.sh,ar.el,0.67);
+    parts.push({d:torsoDep,f:()=>{ taper(ar.sh,shStub,0.074,0.071,k.shirt,1); }});
+    parts.push({d:dep(vlerp(shStub,ar.el,0.5)),f:()=>{
+      taper(shStub,sl,0.071,0.06,k.shirt,1);
       taper(sl,cuff,0.06,0.056,trim,1);
       taper(cuff,ar.el,0.054,0.044,skin,1); }});
     parts.push({d:dep(vlerp(ar.el,ar.hd,0.5)),f:()=>{
       taper(ar.el,ar.hd,0.045,0.035,skin,1);
       taper(ar.hd,vadd(ar.hd,vsc([ar.hd[0]-ar.el[0],ar.hd[1]-ar.el[1],ar.hd[2]-ar.el[2]],HAND_EXT)),o.gloves?0.058:HAND_R[0],o.gloves?0.05:HAND_R[1],o.gloves||skin,1); }});
   }
-  const tc=J.rings[1].reduce((a,p)=>vadd(a,vsc(p,1/8)),[0,0,0]);
   if(!o.hideTorso) parts.push({d:dep(tc),f:()=>{ shell(J.srings,k.shorts); shell(J.rings,k.shirt,{num:o.num,numCol:k.num,trim,bright:true}); }});
   if(!o.hideHead) parts.push({d:dep(J.H)-0.05,f:()=>{ taper(J.C,vadd(J.N,[0,0,0.04]),0.058,0.05,skin,0.92); head(J.H,J.headYaw,skin,o.hair,o.style); }});
   parts.sort((a,b)=>b.d-a.d);
