@@ -1976,7 +1976,16 @@ function replaySpan(){ return [S.freeze-1.6, S.opts[opt].end+0.3]; }
 // scenario-marked player (the ones the replay later quizzes you on, like a deep
 // overlapping run). The diagram and the pan's starting shot only show these -
 // showing the whole XI would shrink everyone to unreadable flecks.
-function relevantIds(){ return ['me',...S.marks.map(m=>m.id)].filter(id=>S.ents[id]); }
+function relevantIds(){
+  // scenario-authored marks aren't the whole story - a defender can be left
+  // out of that list and still be the one player you see up close the moment
+  // play starts (e.g. whoever's jockeying you right at kickoff). Anyone that
+  // close to you at t=0 earns full prominence too, not just a background dot.
+  const marked=['me',...S.marks.map(m=>m.id)];
+  const me0=posOf(S,'me',0,null);
+  const near=Object.keys(S.ents).filter(id=>id!=='me'&&S.ents[id].team!=='gk'&&!marked.includes(id)&&Math.hypot(posOf(S,id,0,null)[0]-me0[0],posOf(S,id,0,null)[1]-me0[1])<10);
+  return [...marked,...near].filter(id=>S.ents[id]);
+}
 function overviewPose(){
   let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
   for(const id of relevantIds()){
