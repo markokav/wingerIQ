@@ -1952,9 +1952,19 @@ let tvLook=[0,0];
 function tvPose(u){
   const p=S.tv.pos, x=p[0]+u*4, y=p[1]+u*1.5, z=p[2];
   const dx=tvLook[0]-x,dy=tvLook[1]-y;
-  return {x,y,z,yaw:Math.atan2(dy,dx),pitch:Math.atan2(z,Math.hypot(dx,dy))*0.92,cy:H*0.5,fov:(W/H<1?58:46)*D2R};
+  return {x,y,z,yaw:Math.atan2(dy,dx),pitch:Math.atan2(z,Math.hypot(dx,dy))*0.92,cy:H*0.5,fov:(W/H<1?66:54)*D2R};
 }
-function tvTarget(tt){ const b=ballAt(S,tt,opt), m=posOf(S,'me',tt,opt); return [lerp(b[0],m[0],0.25)+3,lerp(b[1],m[1],0.25)]; }
+function tvTarget(tt){
+  const b=ballAt(S,tt,opt), aim=S.opts[opt]&&S.opts[opt].aim;
+  // on a pass, frame the ball and where it's actually going together, not just
+  // the ball and the passer - otherwise the open player receiving it can sit
+  // well outside the shot while the camera stays locked on the defender left behind.
+  if(aim&&aim.kind==='PASS'&&aim.who&&S.ents[aim.who]){
+    const r=posOf(S,aim.who,tt,opt);
+    return [lerp(b[0],r[0],0.5),lerp(b[1],r[1],0.5)];
+  }
+  const m=posOf(S,'me',tt,opt); return [lerp(b[0],m[0],0.25)+3,lerp(b[1],m[1],0.25)];
+}
 function lerpPose(a,b,u){ return {x:lerp(a.x,b.x,u),y:lerp(a.y,b.y,u),z:lerp(a.z,b.z,u),yaw:a.yaw+angDiff(a.yaw,b.yaw)*u,pitch:lerp(a.pitch,b.pitch,u),cy:lerp(a.cy,b.cy,u),fov:lerp(a.fov,b.fov,u)}; }
 function replaySpan(){ return [S.freeze-1.6, S.opts[opt].end+0.3]; }
 /* intro: a flat tactical diagram (like a broadcast "tactics cam" graphic before
@@ -2001,8 +2011,12 @@ function diagramRect(){
   return {x:padX,y:topY,w:W-padX*2,h:Math.max(80,botY-topY)};
 }
 function diagramMap(){
+  // framed on the WHOLE team sheet, not just the marked players - tokens are a
+  // fixed pixel size regardless of zoom, so there's no legibility cost to
+  // showing everyone, and it means the cast here matches the cast once play
+  // starts instead of players seeming to appear from nowhere.
   let minX=1e9,maxX=-1e9;
-  for(const id of relevantIds()){ const p=posOf(S,id,0,null); minX=Math.min(minX,p[0]); maxX=Math.max(maxX,p[0]); }
+  for(const id in S.ents){ const p=posOf(S,id,0,null); minX=Math.min(minX,p[0]); maxX=Math.max(maxX,p[0]); }
   const pad=9, x0=clamp(minX-pad,0,105), x1=clamp(maxX+pad,0,105), spanX=Math.max(26,x1-x0);
   const xMid=(x0+x1)/2, xLo=clamp(xMid-spanX/2,0,105-spanX), xHi=xLo+spanX;
   const r=diagramRect(), scale=Math.min(r.w/spanX,r.h/68);
@@ -2024,19 +2038,32 @@ function drawTacticalDiagram(u){
   seg(88.5,-20.16,88.5,20.16); seg(88.5,-20.16,105,-20.16); seg(88.5,20.16,105,20.16);
   seg(99.5,-9.16,99.5,9.16); seg(99.5,-9.16,105,-9.16); seg(99.5,9.16,105,9.16);
   ctx.restore();
-  // place labels first (seeded with every token's own footprint so a pill never
-  // lands under a *different* player's token), then draw every token on top,
-  // so a circle+number is never obscured by another player's label text.
-  const K=kitsNow(), placed=[], tokens=relevantIds().map(id=>{
+  // every player on the sheet gets a token (matching the cast you'll actually
+  // see once play starts); the ones the replay later quizzes you on (plus you)
+  // get the full treatment - bigger, numbered, labelled. The rest are small,
+  // muted context dots: present and correctly positioned, not competing for
+  // attention. Labels are seeded against every token's footprint, key or not,
+  // so a pill never lands on top of a background player either.
+  const K=kitsNow(), relevant=relevantIds(), placed=[], baseAlpha=clamp(fade,0,1);
+  const tokens=Object.keys(S.ents).map(id=>{
     const e=S.ents[id], p=posOf(S,id,0,null), [sx,sy]=M.toXY(p[0],p[1]);
-    return {id,e,sx,sy,kit:e.team==='us'?K.us:e.team==='gk'?K.gk:K.them,num:id==='me'?player.num:e.n};
+    return {id,e,sx,sy,kit:e.team==='us'?K.us:e.team==='gk'?K.gk:K.them,num:id==='me'?player.num:e.n,key:relevant.includes(id)};
   });
-  for(const tk of tokens) placed.push([tk.sx-15,tk.sy-15,30,30]);
+  for(const tk of tokens){ const r=tk.key?15:10; placed.push([tk.sx-r,tk.sy-r,r*2,r*2]); }
   for(const tk of tokens){
+    if(!tk.key) continue;
     const mark=S.marks.find(m=>m.id===tk.id);
     if(mark) pill(tk.sx,tk.sy-26,mark.label,'rgba(10,14,20,.88)','#f4f5f1',12,placed);
   }
+  ctx.globalAlpha=baseAlpha*0.55;
   for(const tk of tokens){
+    if(tk.key) continue;
+    ctx.beginPath(); ctx.arc(tk.sx,tk.sy,9,0,7); ctx.fillStyle=tk.kit.shirt; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle='rgba(10,14,20,.6)'; ctx.stroke();
+  }
+  ctx.globalAlpha=baseAlpha;
+  for(const tk of tokens){
+    if(!tk.key) continue;
     ctx.beginPath(); ctx.arc(tk.sx,tk.sy,14,0,7); ctx.fillStyle=tk.kit.shirt; ctx.fill();
     ctx.lineWidth=tk.id==='me'?3:2; ctx.strokeStyle=tk.id==='me'?'#ffc81e':'rgba(10,14,20,.7)'; ctx.stroke();
     ctx.fillStyle=tk.kit.num; ctx.font='800 13px "Barlow Condensed",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(tk.num,tk.sx,tk.sy+1);
